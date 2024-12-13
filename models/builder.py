@@ -142,7 +142,10 @@ class EncoderDecoder(nn.Module):
 
         self.criterion = criterion
         if self.criterion:
-            self.init_weights(cfg, pretrained=cfg.pretrained_model)
+            if cfg.use_pretrain:
+                self.init_weights(cfg, pretrained=cfg.pretrained_model)
+            else:
+                self.init_weights(cfg)
     
     def init_weights(self, cfg, pretrained=None):
         if pretrained:
