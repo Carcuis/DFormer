@@ -1,4 +1,4 @@
-GPUS=2
+GPUS=1
 NNODES=1
 NODE_RANK=${NODE_RANK:-0}
 PORT=${PORT:-29158}
@@ -15,7 +15,7 @@ python -m torch.distributed.launch  \
     --nproc_per_node=$GPUS \
     --master_port=$PORT  \
     utils/train.py \
-    --config=local_configs.NYUDepthv2.DFormer_Large\
+    --config=local_configs.NYUDepthv2.DFormer_Tiny \
     --gpus=$GPUS \
     --no-sliding \
     --no-compile \
