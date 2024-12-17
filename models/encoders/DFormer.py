@@ -79,6 +79,7 @@ class attention(nn.Module):
         self.q_e=nn.Linear(dim // 2, dim // 2)
         self.a_e=nn.Linear(dim // 2, dim // 2)
         self.e_conv_base=nn.Conv2d(dim // 2, dim // 2, 7, padding=3, groups=dim // 2)
+        self.c_pool=nn.AdaptiveAvgPool2d(output_size=(7, 7))
         self.c_q = nn.Linear(dim // 2, dim // 2)
         self.c_k = nn.Linear(dim // 2, dim // 2)
         self.c_v = nn.Linear(dim // 2, dim // 2)
@@ -89,15 +90,15 @@ class attention(nn.Module):
         self.a = nn.Linear(dim, dim)
         self.l = nn.Linear(dim, dim)
         self.conv = nn.Conv2d(dim, dim, 7, padding=3, groups=dim)
-        self.e_conv = nn.Conv2d(dim // 2, dim // 2, 7, padding=3, groups=dim // 2)
-        self.e_fore = nn.Linear(dim // 2, dim // 2)
-        self.e_back = nn.Linear(dim // 2, dim // 2)
-        self.proj = nn.Linear(dim // 2 * 3, dim)  # 输出下一层Xrgb
+        # self.e_conv = nn.Conv2d(dim // 2, dim // 2, 7, padding=3, groups=dim // 2)
+        # self.e_fore = nn.Linear(dim // 2, dim // 2)
+        # self.e_back = nn.Linear(dim // 2, dim // 2)
+        self.proj = nn.Linear(dim *2, dim)  # 输出下一层Xrgb
 
 
 
         if not drop_depth:
-            self.proj_e = nn.Linear(dim // 2 * 3, dim // 2)  # 输出下一层的Xd，只有原来的
+            self.proj_e = nn.Linear(dim *2, dim // 2)  # 输出下一层的Xd，只有原来的
 
         if window != 0:
             self.short_cut_linear = nn.Linear(dim // 2 * 3, dim // 2)
@@ -145,15 +146,19 @@ class attention(nn.Module):
 
         B1, H1, W1, C1 = cutted_x.size()
         cutted_x=self.c_act(cutted_x)
-        c_q = self.c_q(x_e)
+        x_e_c=x_e.permute(0, 3, 1, 2)
+        x_e_p=self.c_pool(x_e_c).permute(0, 2, 3, 1)
+        c_q = self.c_q(x_e_p)
         c_k = self.c_k(cutted_x)
         c_v = self.c_v(cutted_x)
-        c_q = c_q.reshape(B1, H1*W1, self.num_head, C1 // self.num_head).permute(0, 2, 1, 3)
+        c_q = c_q.reshape(B1, -1, self.num_head, C1 // self.num_head).permute(0, 2, 1, 3)
         c_k = c_k.reshape(B1,H1*W1, self.num_head, C1 // self.num_head).permute(0, 2, 1, 3)
         c_v = c_v.reshape(B1, H1*W1, self.num_head, C1 // self.num_head).permute(0, 2, 1, 3)
         c_attn = (c_q @ c_k.transpose(-2, -1)) * (C1 // self.num_head) ** -0.5
         c_attn = c_attn.softmax(dim=-1)
-        c_attn = (c_attn @ c_v).permute(0, 2, 1, 3).reshape(B1, H1, W1, C1)
+        # c_attn = (c_attn @ c_v).permute(0, 2, 1, 3).reshape(B1, H1, W1, C1)
+        c_attn = (c_attn @ c_v).reshape(B, self.num_head, 7, 7, C1 // self.num_head).permute(0, 1,4,2,3).reshape(B1, C1, 7, 7)
+        c_attn = F.interpolate(c_attn, (H1, W1), mode='bilinear', align_corners=False).permute(0, 2, 3, 1)
 
         if self.window != 0:
             b = x.permute(0, 2, 3, 1)#channel last
